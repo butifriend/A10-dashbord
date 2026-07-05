@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>이용가이드 사이트 대시보드</title>
-<meta name="description" content="이용가이드 사이트 정상 운영 점검 결과를 시각화한 대시보드입니다.">
+<title>Amaranth 10 이용가이드 점검 대시보드</title>
+<meta name="description" content="Amaranth 10 이용가이드 사이트 정상 운영 점검 결과를 시각화한 대시보드입니다.">
 
 <!-- Fonts -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -62,6 +62,14 @@
   .kpi-mini .kpi-value { font-size: 1.35rem; font-weight:800; line-height:1.15; }
   .kpi-mini .kpi-unit { font-size: 0.75rem; font-weight:600; }
   .kpi-mini .kpi-badge { font-size: 0.65rem; }
+  @media print {
+    body { background: #fff !important; }
+    #loadingOverlay, #refreshBtn, #printBtn, .no-print { display: none !important; }
+    header { position: static !important; box-shadow: none !important; }
+    main { max-width: 100% !important; }
+    .card-shadow { box-shadow: none !important; border: 1px solid #e2e8f0 !important; }
+    section { break-inside: avoid; }
+  }
 </style>
 </head>
 
@@ -81,7 +89,7 @@
         <i class="fa-solid fa-gauge-high text-lg"></i>
       </div>
       <div>
-        <h1 class="text-xl sm:text-2xl font-bold text-slate-900 leading-tight">이용가이드 사이트 대시보드</h1>
+        <h1 class="text-xl sm:text-2xl font-bold text-slate-900 leading-tight">Amaranth 10 이용가이드 점검 대시보드</h1>
         <p class="text-xs sm:text-sm text-slate-500">사이트 정상 작동 여부 자동/수동 점검 현황 모니터링</p>
       </div>
     </div>
@@ -97,6 +105,10 @@
         class="hidden sm:inline-flex items-center gap-2 text-sm font-medium border border-slate-300 hover:bg-slate-100 text-slate-600 px-3.5 py-2 rounded-lg transition">
         <i class="fa-solid fa-table text-xs text-green-600"></i> 원본 시트
       </a>
+      <button id="printBtn" title="인쇄 / PDF 다운로드"
+        class="inline-flex items-center gap-2 text-sm font-medium border border-slate-300 hover:bg-slate-100 text-slate-600 px-3.5 py-2 rounded-lg transition">
+        <i class="fa-solid fa-print text-xs text-slate-500"></i> <span class="hidden sm:inline">인쇄/PDF</span>
+      </button>
     </div>
   </div>
 </header>
@@ -104,7 +116,7 @@
 <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
 
   <!-- Tabs -->
-  <section id="tabsSection" class="flex items-center gap-2">
+  <section id="tabsSection" class="flex items-center gap-2 no-print">
     <button id="tabMonthBtn" data-tab="month" class="tab-btn is-active px-4 py-2 rounded-lg text-sm font-semibold transition">당월</button>
     <button id="tabPeriodBtn" data-tab="period" class="tab-btn px-4 py-2 rounded-lg text-sm font-semibold transition">기간별</button>
   </section>
@@ -113,18 +125,24 @@
   <section id="monthlyKpiPanel" class="space-y-3">
     <div class="flex flex-wrap items-end justify-between gap-3">
       <h2 class="text-sm font-semibold text-slate-500" id="monthlyLabel">당월 점검 현황</h2>
-      <div class="bg-white rounded-2xl p-3 card-shadow border border-slate-100 flex flex-wrap items-end gap-3">
+      <div class="bg-white rounded-2xl p-3 card-shadow border border-slate-100 flex flex-wrap items-end gap-3 no-print">
         <div>
           <label class="block text-xs font-medium text-slate-500 mb-1">시작일</label>
-          <input type="date" id="monthlyStart" disabled
-            class="text-sm rounded-lg border border-slate-200 py-1.5 px-3 bg-slate-50 text-slate-500 cursor-not-allowed">
+          <input type="date" id="monthlyStart"
+            class="text-sm rounded-lg border border-slate-200 py-1.5 px-3 focus:outline-none focus:ring-2 focus:ring-brand-200">
         </div>
         <div>
           <label class="block text-xs font-medium text-slate-500 mb-1">종료일</label>
-          <input type="date" id="monthlyEnd" disabled
-            class="text-sm rounded-lg border border-slate-200 py-1.5 px-3 bg-slate-50 text-slate-500 cursor-not-allowed">
+          <input type="date" id="monthlyEnd"
+            class="text-sm rounded-lg border border-slate-200 py-1.5 px-3 focus:outline-none focus:ring-2 focus:ring-brand-200">
         </div>
-        <span class="text-[11px] text-slate-400 flex items-center gap-1"><i class="fa-regular fa-clock"></i> 한국 표준시(KST) 기준 자동 반영</span>
+        <button id="monthlyApplyBtn" class="inline-flex items-center gap-2 text-sm font-medium bg-brand-600 hover:bg-brand-700 active:scale-95 text-white px-3.5 py-1.5 rounded-lg transition shadow-sm">
+          <i class="fa-solid fa-magnifying-glass text-xs"></i> 조회
+        </button>
+        <button id="monthlyResetBtn" class="inline-flex items-center gap-2 text-sm font-medium border border-slate-300 hover:bg-slate-100 text-slate-600 px-3.5 py-1.5 rounded-lg transition">
+          이번 달로 초기화
+        </button>
+        <span class="text-[11px] text-slate-400 flex items-center gap-1"><i class="fa-regular fa-clock"></i> 기본값: KST 기준 이번 달 1일 ~ 오늘</span>
       </div>
     </div>
     <div class="kpi-strip kpi-strip-5">
@@ -156,7 +174,7 @@
 
   <!-- Period KPI Panel -->
   <section id="periodKpiPanel" class="space-y-4 hidden">
-    <div class="bg-white rounded-2xl p-4 card-shadow border border-slate-100 flex flex-wrap items-end gap-3">
+    <div class="bg-white rounded-2xl p-4 card-shadow border border-slate-100 flex flex-wrap items-end gap-3 no-print">
       <div>
         <label class="block text-xs font-medium text-slate-500 mb-1">시작일</label>
         <input type="date" id="periodStart" class="text-sm rounded-lg border border-slate-200 py-2 px-3 focus:outline-none focus:ring-2 focus:ring-brand-200">
@@ -228,10 +246,13 @@
       </div>
     </div>
 
-    <div id="errorSection" class="bg-white rounded-2xl p-5 card-shadow border border-slate-100 lg:col-span-2 hidden">
-      <div class="flex items-center gap-2 mb-3">
-        <i class="fa-solid fa-bug text-rose-500"></i>
-        <h2 class="font-bold text-slate-800">오류 발생 이력</h2>
+    <div id="errorSection" class="bg-white rounded-2xl p-5 card-shadow border border-slate-100 lg:col-span-2">
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2">
+          <i class="fa-solid fa-bug text-rose-500"></i>
+          <h2 class="font-bold text-slate-800" id="errorSectionTitle">오류 발생 이력</h2>
+        </div>
+        <span id="errorCountBadge" class="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-500">0건</span>
       </div>
       <div id="errorList" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
     </div>
@@ -244,7 +265,7 @@
         <h2 class="font-bold text-slate-800" id="logTableTitle">전체 점검 로그</h2>
         <p class="text-xs text-slate-400">구글 시트 원본 데이터 기반</p>
       </div>
-      <div class="flex flex-wrap items-center gap-2">
+      <div class="flex flex-wrap items-center gap-2 no-print">
         <div class="relative">
           <i class="fa-solid fa-magnifying-glass text-xs text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
           <input id="searchInput" type="text" placeholder="내용 검색..."
@@ -279,7 +300,7 @@
 
     <div class="flex items-center justify-between mt-4 text-sm text-slate-500">
       <p id="tableSummary">-</p>
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2 no-print">
         <button id="prevPage" class="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"><i class="fa-solid fa-chevron-left"></i></button>
         <span id="pageInfo" class="text-xs">1 / 1</span>
         <button id="nextPage" class="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"><i class="fa-solid fa-chevron-right"></i></button>
@@ -348,6 +369,9 @@ let activeTab = 'month';       // 'month' | 'period'
 let periodStartDate = null;    // 기간별 조회 시작일 (YYYY-MM-DD)
 let periodEndDate = null;      // 기간별 조회 종료일 (YYYY-MM-DD)
 let periodInitialized = false; // 기간별 탭 기본값(올해 1월~오늘) 최초 1회만 자동 설정 여부
+let monthlyStartDate = null;   // 당월 탭 조회 시작일 (YYYY-MM-DD, 사용자 편집 가능)
+let monthlyEndDate = null;     // 당월 탭 조회 종료일 (YYYY-MM-DD, 사용자 편집 가능)
+let monthlyInitialized = false;// 당월 탭 기본값(이번 달 1일~오늘) 최초 1회만 자동 설정 여부
 
 /* ==========================================================
    2. 데이터 로드 (Google Sheet gviz -> 실패 시 폴백)
@@ -445,8 +469,16 @@ function getMonthStartStr() {
 }
 
 function getMonthlyData() {
-  const key = getCurrentMonthKey();
-  return RAW_DATA.filter(d => d.date && d.date.startsWith(key));
+  if (!monthlyStartDate && !monthlyEndDate) {
+    const key = getCurrentMonthKey();
+    return RAW_DATA.filter(d => d.date && d.date.startsWith(key));
+  }
+  return RAW_DATA.filter(d => {
+    if (!d.date) return false;
+    if (monthlyStartDate && d.date < monthlyStartDate) return false;
+    if (monthlyEndDate && d.date > monthlyEndDate) return false;
+    return true;
+  });
 }
 
 function getPeriodData() {
@@ -464,19 +496,27 @@ function getActiveData() {
 }
 
 /**
- * 당월 탭: 시작일 = 당월 1일(KST), 종료일 = 오늘(KST)로 고정 표시(수정 불가)
+ * 당월 탭: 기본값 = 이번 달 1일(KST) ~ 오늘(KST). 사용자가 직접 편집 가능.
  * 기간별 탭: 기본값 = 올해 1월 1일(KST) ~ 오늘(KST). 사용자가 직접 변경 가능.
  */
 function initPeriodInputs() {
   const todayStr = getKstTodayStr();
   const yearStartStr = `${getKstYear()}-01-01`;
 
-  // 당월 탭 - 표시 전용 (수정 불가)
+  // 당월 탭 - 기본값: 이번 달 1일 ~ 오늘 (최초 1회만 자동 설정, 이후 새로고침 시 사용자가 지정한 기간 유지)
   const monthlyStartInput = document.getElementById('monthlyStart');
   const monthlyEndInput = document.getElementById('monthlyEnd');
   if (monthlyStartInput && monthlyEndInput) {
-    monthlyStartInput.value = getMonthStartStr();
-    monthlyEndInput.value = todayStr;
+    monthlyStartInput.max = todayStr;
+    monthlyEndInput.max = todayStr;
+    if (!monthlyInitialized) {
+      const monthStartStr = getMonthStartStr();
+      monthlyStartInput.value = monthStartStr;
+      monthlyEndInput.value = todayStr;
+      monthlyStartDate = monthStartStr;
+      monthlyEndDate = todayStr;
+      monthlyInitialized = true;
+    }
   }
 
   // 기간별 탭 - 기본값: 올해 1월 1일 ~ 오늘 (최초 1회만 자동 설정, 이후 새로고침 시 사용자가 지정한 기간 유지)
@@ -514,11 +554,18 @@ function refreshActivePanels() {
 }
 
 function renderMonthlyPanel() {
-  const key = getCurrentMonthKey();
-  const [y, m] = key.split('-');
-  document.getElementById('monthlyLabel').textContent = `${y}년 ${parseInt(m, 10)}월 점검 현황`;
-
   const data = getMonthlyData();
+
+  // 조회 범위 라벨: 사용자가 편집한 기간이 있으면 해당 기간을, 없으면 이번 달 명칭을 표시
+  const labelEl = document.getElementById('monthlyLabel');
+  if (monthlyStartDate && monthlyEndDate) {
+    labelEl.textContent = `점검 현황 (${monthlyStartDate} ~ ${monthlyEndDate})`;
+  } else {
+    const key = getCurrentMonthKey();
+    const [y, m] = key.split('-');
+    labelEl.textContent = `${y}년 ${parseInt(m, 10)}월 점검 현황`;
+  }
+
   const total = data.length;
   const ok = data.filter(d => d.status === '정상').length;
   const err = total - ok;
@@ -627,15 +674,30 @@ function renderChart(canvasId, type, data, extraOptions) {
    5. 오류 하이라이트
    ========================================================== */
 function renderErrorHighlights() {
-  const errors = getActiveData().filter(d => d.status !== '정상');
-  const section = document.getElementById('errorSection');
+  const data = getActiveData();
+  const errors = data.filter(d => d.status !== '정상').slice().reverse(); // 최신순
   const list = document.getElementById('errorList');
+  const titleEl = document.getElementById('errorSectionTitle');
+  const badgeEl = document.getElementById('errorCountBadge');
   list.innerHTML = '';
+
+  const scopeLabel = activeTab === 'month' ? '당월' : '기간별';
+  titleEl.textContent = `${scopeLabel} 오류 발생 이력`;
+  badgeEl.textContent = `${errors.length.toLocaleString()}건`;
+  badgeEl.className = 'text-xs font-semibold px-2.5 py-1 rounded-full ' +
+    (errors.length > 0 ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600');
+
   if (errors.length === 0) {
-    section.classList.add('hidden');
+    list.innerHTML = `
+      <div class="sm:col-span-2 flex items-center gap-3 p-4 rounded-xl border border-emerald-100 bg-emerald-50">
+        <div class="w-8 h-8 rounded-lg bg-emerald-500 text-white flex items-center justify-center flex-shrink-0">
+          <i class="fa-solid fa-check"></i>
+        </div>
+        <p class="text-sm text-emerald-700">${activeTab === 'month' ? '이번 달' : '선택한 기간'} 동안 발생한 오류가 없습니다.</p>
+      </div>`;
     return;
   }
-  section.classList.remove('hidden');
+
   errors.forEach(e => {
     const div = document.createElement('div');
     div.className = 'flex items-start gap-3 p-3 rounded-xl border border-rose-100 bg-rose-50';
@@ -744,6 +806,24 @@ document.getElementById('periodResetBtn').addEventListener('click', () => {
   document.getElementById('periodStart').value = yearStartStr;
   document.getElementById('periodEnd').value = todayStr;
   refreshActivePanels();
+});
+document.getElementById('monthlyApplyBtn').addEventListener('click', () => {
+  monthlyStartDate = document.getElementById('monthlyStart').value || null;
+  monthlyEndDate = document.getElementById('monthlyEnd').value || null;
+  refreshActivePanels();
+});
+document.getElementById('monthlyResetBtn').addEventListener('click', () => {
+  // "이번 달 1일 ~ 오늘"(KST 기준)으로 초기화
+  const todayStr = getKstTodayStr();
+  const monthStartStr = getMonthStartStr();
+  monthlyStartDate = monthStartStr;
+  monthlyEndDate = todayStr;
+  document.getElementById('monthlyStart').value = monthStartStr;
+  document.getElementById('monthlyEnd').value = todayStr;
+  refreshActivePanels();
+});
+document.getElementById('printBtn').addEventListener('click', () => {
+  window.print();
 });
 
 /* ==========================================================
