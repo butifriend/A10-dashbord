@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>이용가이드 사이트 대시보드</title>
+<meta name="description" content="이용가이드 사이트 정상 운영 점검 결과를 시각화한 대시보드입니다.">
+
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com"></script>
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<!-- Font Awesome -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['"Noto Sans KR"', 'sans-serif'],
+        },
+        colors: {
+          brand: {
+            50: '#eef2ff',
+            100: '#e0e7ff',
+            500: '#6366f1',
+            600: '#4f46e5',
+            700: '#4338ca',
+            900: '#312e81',
+          }
+        }
+      }
+    }
+  }
+</script>
+
+<style>
+  body { font-family: 'Noto Sans KR', sans-serif; }
+  .card-shadow { box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04); }
+  .scrollbar-thin::-webkit-scrollbar { height: 8px; width: 8px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+  .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+  .status-dot { width: 8px; height: 8px; border-radius: 9999px; display:inline-block; }
+  @keyframes pulse-dot { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
+  .pulse { animation: pulse-dot 1.6s ease-in-out infinite; }
+  .fade-in { animation: fadeIn .5s ease both; }
+  @keyframes fadeIn { from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);} }
+  #loadingOverlay { transition: opacity .35s ease; }
+  .tab-btn { background:#fff; color:#64748b; border:1px solid #e2e8f0; }
+  .tab-btn:hover { background:#f8fafc; }
+  .tab-btn.is-active { background:#4f46e5; color:#fff; border-color:#4f46e5; box-shadow:0 4px 10px rgba(79,70,229,0.25); }
+  .kpi-strip { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 0.75rem; }
+  @media (min-width: 768px) { .kpi-strip-5 { grid-template-columns: repeat(5, minmax(0,1fr)); } .kpi-strip-6 { grid-template-columns: repeat(6, minmax(0,1fr)); } }
+  .kpi-mini { padding: 0.75rem 1rem; display:flex; flex-direction:column; gap:0.35rem; }
+  .kpi-mini .kpi-label { font-size: 0.72rem; color:#64748b; font-weight:500; white-space:nowrap; }
+  .kpi-mini .kpi-value-row { display:flex; align-items:baseline; gap:0.3rem; }
+  .kpi-mini .kpi-value { font-size: 1.35rem; font-weight:800; line-height:1.15; }
+  .kpi-mini .kpi-unit { font-size: 0.75rem; font-weight:600; }
+  .kpi-mini .kpi-badge { font-size: 0.65rem; }
+</style>
+</head>
+
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+
+<!-- Loading overlay -->
+<div id="loadingOverlay" class="fixed inset-0 bg-slate-50 z-50 flex flex-col items-center justify-center gap-3">
+  <div class="w-10 h-10 border-4 border-brand-200 border-t-brand-600 rounded-full animate-spin"></div>
+  <p class="text-sm text-slate-500">데이터를 불러오는 중입니다...</p>
+</div>
+
+<!-- Header -->
+<header class="sticky top-0 z-40 bg-white/90 backdrop-blur border-b border-slate-200">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-wrap items-center justify-between gap-3">
+    <div class="flex items-center gap-3">
+      <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center text-white shadow-md">
+        <i class="fa-solid fa-gauge-high text-lg"></i>
+      </div>
+      <div>
+        <h1 class="text-xl sm:text-2xl font-bold text-slate-900 leading-tight">이용가이드 사이트 대시보드</h1>
+        <p class="text-xs sm:text-sm text-slate-500">사이트 정상 작동 여부 자동/수동 점검 현황 모니터링</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <span id="connectionBadge" class="hidden sm:inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 border border-slate-200">
+        <span class="status-dot bg-slate-400"></span> 연결 확인 중
+      </span>
+      <span class="text-xs text-slate-400 hidden md:inline" id="lastUpdated">마지막 갱신: -</span>
+      <button id="refreshBtn" class="inline-flex items-center gap-2 text-sm font-medium bg-brand-600 hover:bg-brand-700 active:scale-95 text-white px-3.5 py-2 rounded-lg transition shadow-sm">
+        <i class="fa-solid fa-rotate-right text-xs"></i> 새로고침
+      </button>
+      <a href="https://docs.google.com/spreadsheets/d/132r740wkRSzKtyRe1LKomEZ-2jmdVJmFDBDHYY_PPxc/edit?gid=0#gid=0" target="_blank" rel="noopener"
+        class="hidden sm:inline-flex items-center gap-2 text-sm font-medium border border-slate-300 hover:bg-slate-100 text-slate-600 px-3.5 py-2 rounded-lg transition">
+        <i class="fa-solid fa-table text-xs text-green-600"></i> 원본 시트
+      </a>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+  <!-- Tabs -->
+  <section id="tabsSection" class="flex items-center gap-2">
+    <button id="tabMonthBtn" data-tab="month" class="tab-btn is-active px-4 py-2 rounded-lg text-sm font-semibold transition">당월</button>
+    <button id="tabPeriodBtn" data-tab="period" class="tab-btn px-4 py-2 rounded-lg text-sm font-semibold transition">기간별</button>
+  </section>
+
+  <!-- Monthly KPI Panel -->
+  <section id="monthlyKpiPanel" class="space-y-3">
+    <h2 class="text-sm font-semibold text-slate-500" id="monthlyLabel">당월 점검 현황</h2>
+    <div class="kpi-strip kpi-strip-5">
+      <div class="kpi-mini bg-white rounded-xl card-shadow border-t-4 border-t-blue-500 border-x border-b border-slate-100 fade-in">
+        <span class="kpi-label">최근 점검 상태</span>
+        <p class="kpi-value text-blue-600" id="monthlyLastStatus">-</p>
+        <span id="monthlyStatusBadge" class="kpi-badge inline-flex items-center gap-1 font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 w-fit">
+          <i class="fa-solid fa-check text-[10px]"></i> 정상 운영 중
+        </span>
+      </div>
+      <div class="kpi-mini bg-white rounded-xl card-shadow border-t-4 border-t-slate-300 border-x border-b border-slate-100 fade-in">
+        <span class="kpi-label">당월 점검 총 건수</span>
+        <p class="kpi-value-row"><span class="kpi-value text-slate-900" id="monthlyTotal">0</span><span class="kpi-unit text-slate-400">건</span></p>
+      </div>
+      <div class="kpi-mini bg-white rounded-xl card-shadow border-t-4 border-t-emerald-500 border-x border-b border-slate-100 fade-in">
+        <span class="kpi-label">정상 건수</span>
+        <p class="kpi-value-row"><span class="kpi-value text-emerald-600" id="monthlyOk">0</span><span class="kpi-unit text-emerald-400">건</span></p>
+      </div>
+      <div class="kpi-mini bg-white rounded-xl card-shadow border-t-4 border-t-rose-500 border-x border-b border-slate-100 fade-in">
+        <span class="kpi-label">오류 건수</span>
+        <p class="kpi-value-row"><span class="kpi-value text-rose-600" id="monthlyError">0</span><span class="kpi-unit text-rose-400">건</span></p>
+      </div>
+      <div class="kpi-mini bg-white rounded-xl card-shadow border-t-4 border-t-emerald-500 border-x border-b border-slate-100 fade-in">
+        <span class="kpi-label">성공률</span>
+        <p class="kpi-value text-emerald-600" id="monthlyRate">0%</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Period KPI Panel -->
+  <section id="periodKpiPanel" class="space-y-4 hidden">
+    <div class="bg-white rounded-2xl p-4 card-shadow border border-slate-100 flex flex-wrap items-end gap-3">
+      <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1">시작일</label>
+        <input type="date" id="periodStart" class="text-sm rounded-lg border border-slate-200 py-2 px-3 focus:outline-none focus:ring-2 focus:ring-brand-200">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1">종료일</label>
+        <input type="date" id="periodEnd" class="text-sm rounded-lg border border-slate-200 py-2 px-3 focus:outline-none focus:ring-2 focus:ring-brand-200">
+      </div>
+      <button id="periodApplyBtn" class="inline-flex items-center gap-2 text-sm font-medium bg-brand-600 hover:bg-brand-700 active:scale-95 text-white px-3.5 py-2 rounded-lg transition shadow-sm">
+        <i class="fa-solid fa-magnifying-glass text-xs"></i> 조회
+      </button>
+      <button id="periodResetBtn" class="inline-flex items-center gap-2 text-sm font-medium border border-slate-300 hover:bg-slate-100 text-slate-600 px-3.5 py-2 rounded-lg transition">
+        전체 기간
+      </button>
+      <span class="text-xs text-slate-400 ml-auto" id="periodRangeLabel">-</span>
+    </div>
+
+    <div class="kpi-strip kpi-strip-6">
+      <div class="kpi-mini bg-white rounded-xl card-shadow border-t-4 border-t-brand-500 border-x border-b border-slate-100 fade-in">
+        <span class="kpi-label">총 점검 횟수</span>
+        <p class="kpi-value-row"><span class="kpi-value text-slate-900" id="kpiTotal">-</span><span class="kpi-unit text-slate-400">건</span></p>
+        <p class="text-[10px] text-slate-400 truncate" id="kpiPeriod">-</p>
+      </div>
+
+      <div class="kpi-mini bg-white rounded-xl card-shadow border-t-4 border-t-emerald-500 border-x border-b border-slate-100 fade-in">
+        <span class="kpi-label">정상 건수</span>
+        <p class="kpi-value-row"><span class="kpi-value text-emerald-600" id="kpiOk">-</span><span class="kpi-unit text-emerald-400">건</span></p>
+        <p class="text-[10px] text-slate-400" id="kpiOkRatio">-</p>
+      </div>
+
+      <div class="kpi-mini bg-white rounded-xl card-shadow border-t-4 border-t-rose-500 border-x border-b border-slate-100 fade-in">
+        <span class="kpi-label">오류 발생 건수</span>
+        <p class="kpi-value-row"><span class="kpi-value text-rose-600" id="kpiError">-</span><span class="kpi-unit text-rose-400">건</span></p>
+        <p class="text-[10px] text-slate-400" id="kpiErrorRatio">-</p>
+      </div>
+
+      <div class="kpi-mini bg-white rounded-xl card-shadow border-t-4 border-t-indigo-500 border-x border-b border-slate-100 fade-in">
+        <span class="kpi-label">평균 성공률</span>
+        <p class="kpi-value text-slate-900" id="kpiSuccessRate">-</p>
+        <div class="w-full bg-slate-100 rounded-full h-1.5"><div id="kpiSuccessBar" class="h-1.5 rounded-full bg-indigo-500" style="width:0%"></div></div>
+      </div>
+
+      <div class="kpi-mini bg-white rounded-xl card-shadow border-t-4 border-t-amber-500 border-x border-b border-slate-100 fade-in">
+        <span class="kpi-label">최근 상태</span>
+        <p class="kpi-value" id="kpiLastStatus">-</p>
+        <p class="text-[10px] text-slate-400 truncate" id="kpiLastTime">-</p>
+      </div>
+
+      <div class="kpi-mini bg-white rounded-xl card-shadow border-t-4 border-t-slate-400 border-x border-b border-slate-100 fade-in">
+        <span class="kpi-label">점검 방법</span>
+        <p class="text-sm font-bold text-slate-800 truncate" id="kpiMethods">-</p>
+        <p class="text-[10px] text-slate-400">수동 / 수동(CMD)</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Status chart + Error highlights -->
+  <section class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+    <div class="bg-white rounded-2xl p-5 card-shadow border border-slate-100">
+      <div class="flex items-center justify-between mb-3">
+        <div>
+          <h2 class="font-bold text-slate-800">상태 비율</h2>
+          <p class="text-xs text-slate-400" id="statusChartScopeLabel">전체 점검 결과 분포</p>
+        </div>
+      </div>
+      <div class="h-64 flex items-center justify-center">
+        <canvas id="statusDoughnut"></canvas>
+      </div>
+    </div>
+
+    <div id="errorSection" class="bg-white rounded-2xl p-5 card-shadow border border-slate-100 lg:col-span-2 hidden">
+      <div class="flex items-center gap-2 mb-3">
+        <i class="fa-solid fa-bug text-rose-500"></i>
+        <h2 class="font-bold text-slate-800">오류 발생 이력</h2>
+      </div>
+      <div id="errorList" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+    </div>
+  </section>
+
+  <!-- Log Table -->
+  <section class="bg-white rounded-2xl p-5 card-shadow border border-slate-100">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+      <div>
+        <h2 class="font-bold text-slate-800" id="logTableTitle">전체 점검 로그</h2>
+        <p class="text-xs text-slate-400">구글 시트 원본 데이터 기반</p>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <div class="relative">
+          <i class="fa-solid fa-magnifying-glass text-xs text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+          <input id="searchInput" type="text" placeholder="내용 검색..."
+            class="pl-8 pr-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-200 focus:border-brand-400 w-44 sm:w-56">
+        </div>
+        <select id="statusFilter" class="text-sm rounded-lg border border-slate-200 py-2 px-3 focus:outline-none focus:ring-2 focus:ring-brand-200">
+          <option value="all">전체 상태</option>
+          <option value="정상">정상</option>
+          <option value="오류 발생">오류 발생</option>
+        </select>
+        <select id="methodFilter" class="text-sm rounded-lg border border-slate-200 py-2 px-3 focus:outline-none focus:ring-2 focus:ring-brand-200">
+          <option value="all">전체 방법</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto scrollbar-thin">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-slate-500 border-b border-slate-200">
+            <th class="py-2.5 pr-4 font-semibold whitespace-nowrap">기간</th>
+            <th class="py-2.5 pr-4 font-semibold whitespace-nowrap">시간</th>
+            <th class="py-2.5 pr-4 font-semibold whitespace-nowrap">방법</th>
+            <th class="py-2.5 pr-4 font-semibold whitespace-nowrap">상태</th>
+            <th class="py-2.5 pr-4 font-semibold">내용</th>
+            <th class="py-2.5 pr-4 font-semibold whitespace-nowrap text-right">성공률</th>
+          </tr>
+        </thead>
+        <tbody id="logTableBody" class="divide-y divide-slate-100"></tbody>
+      </table>
+    </div>
+
+    <div class="flex items-center justify-between mt-4 text-sm text-slate-500">
+      <p id="tableSummary">-</p>
+      <div class="flex items-center gap-2">
+        <button id="prevPage" class="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"><i class="fa-solid fa-chevron-left"></i></button>
+        <span id="pageInfo" class="text-xs">1 / 1</span>
+        <button id="nextPage" class="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"><i class="fa-solid fa-chevron-right"></i></button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 text-center text-xs text-slate-400">
+  데이터 출처: Google Sheets (이용가이드 사이트 점검 로그) · 대시보드는 브라우저에서 실시간으로 시트를 조회합니다.
+</footer>
+
+<script>
+/* ==========================================================
+   1. 설정 및 예비(폴백) 데이터
+   ========================================================== */
+const SHEET_ID = '132r740wkRSzKtyRe1LKomEZ-2jmdVJmFDBDHYY_PPxc';
+const GID = '0';
+const GVIZ_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${GID}`;
+
+// 시트를 불러오지 못할 경우 사용할 폴백 데이터(마지막 확인된 시트 내용)
+const FALLBACK_DATA = [
+  ["2026-06-24","16:21:31","수동","정상","정상 로그인 및 홈 화면 콘텐츠(매뉴얼 업데이트 내역) 표출 확인 완료","100%"],
+  ["2026-06-24","17:22:47","수동","정상","정상 로그인 및 홈 화면 콘텐츠(매뉴얼 업데이트 내역) 표출 확인 완료","100%"],
+  ["2026-06-24","17:23:04","수동","정상","정상 로그인 및 홈 화면 콘텐츠(매뉴얼 업데이트 내역) 표출 확인 완료","100%"],
+  ["2026-06-25","08:52:56","수동","정상","정상 로그인 및 홈 화면 콘텐츠(매뉴얼 업데이트 내역) 표출 확인 완료","100%"],
+  ["2026-06-25","09:00:32","수동","정상","정상 로그인 및 홈 화면 콘텐츠(매뉴얼 업데이트 내역) 표출 확인 완료","100%"],
+  ["2026-06-25","09:30:36","수동","정상","정상 로그인 및 홈 화면 콘텐츠(매뉴얼 업데이트 내역) 표출 확인 완료","100%"],
+  ["2026-06-25","10:00:33","수동","정상","정상 로그인 및 홈 화면 콘텐츠(매뉴얼 업데이트 내역) 표출 확인 완료","100%"],
+  ["2026-06-25","10:30:30","수동","정상","정상 로그인 및 홈 화면 콘텐츠(매뉴얼 업데이트 내역) 표출 확인 완료","100%"],
+  ["2026-06-25","11:00:31","수동","정상","정상 로그인 및 홈 화면 콘텐츠(매뉴얼 업데이트 내역) 표출 확인 완료","100%"],
+  ["2026-06-25","11:30:31","수동","정상","정상 로그인 및 홈 화면 콘텐츠(매뉴얼 업데이트 내역) 표출 확인 완료","100%"],
+  ["2026-06-25","12:00:31","수동","정상","정상 로그인 및 홈 화면 콘텐츠(매뉴얼 업데이트 내역) 표출 확인 완료","100%"],
+  ["2026-06-25","12:30:51","수동","오류 발생","Message:  ","0%"],
+  ["2026-06-25","13:30:35","수동","정상","정상 로그인 및 홈 화면 콘텐츠(매뉴얼 업데이트 내역) 표출 확인 완료","100%"],
+  ["2026-06-25","14:00:33","수동","정상","정상 로그인 및 홈 화면 콘텐츠(매뉴얼 업데이트 내역) 표출 확인 완료","100%"],
+  ["2026-06-25","14:30:31","수동","정상","정상 로그인 및 홈 화면 콘텐츠(매뉴얼 업데이트 내역) 표출 확인 완료","100%"],
+  ["2026-06-25","15:00:33","수동","정상","정상 로그인 및 홈 화면 콘텐츠(매뉴얼 업데이트 내역) 표출 확인 완료","100%"],
+  ["2026-06-25","15:30:31","수동","정상","정상 로그인 및 홈 화면 콘텐츠(매뉴얼 업데이트 내역) 표출 확인 완료","100%"],
+  ["2026-06-25","16:00:41","수동","정상","정상 로그인 및 홈 화면 콘텐츠(매뉴얼 업데이트 내역) 표출 확인 완료","100%"],
+  ["2026-06-25","16:31:14","수동","정상","정상 로그인 및 홈 화면 콘텐츠(매뉴얼 업데이트 내역) 표출 확인 완료","100%"],
+  ["2026-06-25","17:00:30","수동","정상","정상 로그인 및 홈 화면 콘텐츠(매뉴얼 업데이트 내역) 표출 확인 완료","100%"],
+  ["2026-06-25","17:30:32","수동","정상","정상 로그인 및 홈 화면 콘텐츠(매뉴얼 업데이트 내역) 표출 확인 완료","100%"],
+  ["2026-06-25","18:00:31","수동","정상","정상 로그인 및 홈 화면 콘텐츠(매뉴얼 업데이트 내역) 표출 확인 완료","100%"],
+  ["2026-06-26","09:01:02","수동","정상","정상 로그인 및 홈 화면 콘텐츠(매뉴얼 업데이트 내역) 표출 확인 완료","100%"],
+  ["2026-06-26","10:00:35","수동","정상","정상 로그인 및 홈 화면 콘텐츠(매뉴얼 업데이트 내역) 표출 확인 완료","100%"],
+  ["2026-06-26","11:00:48","수동","오류 발생","Message:  ","0%"],
+  ["2026-06-26","12:00:34","수동","정상","정상 로그인 및 홈 화면 콘텐츠(매뉴얼 업데이트 내역) 표출 확인 완료","100%"],
+  ["2026-06-26","13:00:45","수동","정상","정상 로그인 및 홈 화면 콘텐츠(매뉴얼 업데이트 내역) 표출 확인 완료","100%"],
+  ["2026-06-26","14:00:31","수동","정상","정상 로그인 및 홈 화면 콘텐츠(매뉴얼 업데이트 내역) 표출 확인 완료","100%"],
+  ["2026-06-26","15:00:59","수동","정상","정상 로그인 및 홈 화면 콘텐츠(매뉴얼 업데이트 내역) 표출 확인 완료","100%"],
+  ["2026-06-26","16:00:30","수동","정상","정상 로그인 및 홈 화면 콘텐츠(매뉴얼 업데이트 내역) 표출 확인 완료","100%"],
+  ["2026-06-26","17:00:34","수동","정상","정상 로그인 및 홈 화면 콘텐츠(매뉴얼 업데이트 내역) 표출 확인 완료","100%"],
+  ["2026-06-26","18:00:36","수동","정상","정상 로그인 및 홈 화면 콘텐츠(매뉴얼 업데이트 내역) 표출 확인 완료","100%"],
+  ["2026-06-30","08:18:56","수동(CMD)","정상","정상 로그인 및 홈 화면 콘텐츠(매뉴얼 업데이트 내역) 표출 확인 완료","100%"],
+  ["2026-06-30","08:48:41","수동(CMD)","정상","정상 로그인 및 홈 화면 콘텐츠(매뉴얼 업데이트 내역) 표출 확인 완료","100%"]
+];
+
+let RAW_DATA = [];       // {date, time, method, status, content, rate}
+let filteredData = [];
+let currentPage = 1;
+const PAGE_SIZE = 10;
+let charts = {};
+let activeTab = 'month';       // 'month' | 'period'
+let periodStartDate = null;    // 기간별 조회 시작일 (YYYY-MM-DD)
+let periodEndDate = null;      // 기간별 조회 종료일 (YYYY-MM-DD)
+
+/* ==========================================================
+   2. 데이터 로드 (Google Sheet gviz -> 실패 시 폴백)
+   ========================================================== */
+async function loadSheetData() {
+  setConnectionBadge('checking');
+  try {
+    const res = await fetch(GVIZ_URL, { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const text = await res.text();
+    const jsonStr = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
+    const json = JSON.parse(jsonStr);
+    const rows = json.table.rows;
+    const parsed = [];
+    rows.forEach(r => {
+      const cells = r.c;
+      if (!cells) return;
+      const get = (i) => (cells[i] && cells[i].v !== null && cells[i].v !== undefined) ? String(cells[i].v).trim() : '';
+      const date = get(0), time = get(1), method = get(2), status = get(3), content = get(4), rate = get(5);
+      if (!date && !time && !status) return; // 빈 행 skip
+      parsed.push({ date, time, method, status, content, rate });
+    });
+    if (parsed.length === 0) throw new Error('empty');
+    RAW_DATA = parsed;
+    setConnectionBadge('online');
+  } catch (err) {
+    console.warn('Google Sheet 연동 실패, 폴백 데이터 사용:', err);
+    RAW_DATA = FALLBACK_DATA.map(row => ({
+      date: row[0], time: row[1], method: row[2], status: row[3], content: row[4], rate: row[5]
+    }));
+    setConnectionBadge('offline');
+  }
+  buildMethodFilterOptions();
+  initPeriodInputs();
+  setActiveTab(activeTab);
+  updateLastUpdated();
+  hideLoading();
+}
+
+function setConnectionBadge(state) {
+  const badge = document.getElementById('connectionBadge');
+  badge.classList.remove('hidden');
+  if (state === 'checking') {
+    badge.innerHTML = '<span class="status-dot bg-slate-400 pulse"></span> 연결 확인 중';
+    badge.className = 'hidden sm:inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 border border-slate-200';
+  } else if (state === 'online') {
+    badge.innerHTML = '<span class="status-dot bg-emerald-500"></span> 실시간 연동됨';
+    badge.className = 'hidden sm:inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200';
+  } else {
+    badge.innerHTML = '<span class="status-dot bg-amber-500"></span> 오프라인 데이터(캐시)';
+    badge.className = 'hidden sm:inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-amber-50 text-amber-600 border border-amber-200';
+  }
+}
+
+function updateLastUpdated() {
+  const now = new Date();
+  document.getElementById('lastUpdated').textContent = '마지막 갱신: ' + now.toLocaleString('ko-KR');
+}
+
+function hideLoading() {
+  const overlay = document.getElementById('loadingOverlay');
+  overlay.style.opacity = '0';
+  setTimeout(() => overlay.style.display = 'none', 350);
+}
+
+/* ==========================================================
+   3. 탭 / KPI 계산 및 렌더링
+   ========================================================== */
+function getCurrentMonthKey() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function getMonthlyData() {
+  const key = getCurrentMonthKey();
+  return RAW_DATA.filter(d => d.date && d.date.startsWith(key));
+}
+
+function getPeriodData() {
+  if (!periodStartDate && !periodEndDate) return RAW_DATA.slice();
+  return RAW_DATA.filter(d => {
+    if (!d.date) return false;
+    if (periodStartDate && d.date < periodStartDate) return false;
+    if (periodEndDate && d.date > periodEndDate) return false;
+    return true;
+  });
+}
+
+function getActiveData() {
+  return activeTab === 'month' ? getMonthlyData() : getPeriodData();
+}
+
+function initPeriodInputs() {
+  const dates = RAW_DATA.map(d => d.date).filter(Boolean).slice().sort();
+  if (!dates.length) return;
+  const min = dates[0], max = dates[dates.length - 1];
+  const s = document.getElementById('periodStart');
+  const e = document.getElementById('periodEnd');
+  s.min = min; s.max = max;
+  e.min = min; e.max = max;
+}
+
+function setActiveTab(tab) {
+  activeTab = tab;
+  document.getElementById('tabMonthBtn').classList.toggle('is-active', tab === 'month');
+  document.getElementById('tabPeriodBtn').classList.toggle('is-active', tab === 'period');
+  document.getElementById('monthlyKpiPanel').classList.toggle('hidden', tab !== 'month');
+  document.getElementById('periodKpiPanel').classList.toggle('hidden', tab !== 'period');
+  refreshActivePanels();
+}
+
+function refreshActivePanels() {
+  if (activeTab === 'month') renderMonthlyPanel(); else renderPeriodPanel();
+  renderCharts();
+  renderErrorHighlights();
+  applyFilters();
+  const titleEl = document.getElementById('logTableTitle');
+  if (titleEl) titleEl.textContent = activeTab === 'month' ? '당월 점검 로그' : '기간별 점검 로그';
+}
+
+function renderMonthlyPanel() {
+  const key = getCurrentMonthKey();
+  const [y, m] = key.split('-');
+  document.getElementById('monthlyLabel').textContent = `${y}년 ${parseInt(m, 10)}월 점검 현황`;
+
+  const data = getMonthlyData();
+  const total = data.length;
+  const ok = data.filter(d => d.status === '정상').length;
+  const err = total - ok;
+  const rates = data.map(d => parseFloat((d.rate || '0').replace('%','')) || 0);
+  const avgRate = rates.length ? (rates.reduce((a,b)=>a+b,0) / rates.length) : 0;
+
+  document.getElementById('monthlyTotal').textContent = total.toLocaleString();
+  document.getElementById('monthlyOk').textContent = ok.toLocaleString();
+  document.getElementById('monthlyError').textContent = err.toLocaleString();
+
+  const rateEl = document.getElementById('monthlyRate');
+  rateEl.textContent = avgRate.toFixed(0) + '%';
+  rateEl.className = 'kpi-value ' + ((total > 0 && avgRate < 100) ? 'text-rose-600' : 'text-emerald-600');
+
+  // 최근 점검 상태는 전체 데이터 기준 가장 마지막 점검 결과를 표시
+  const last = RAW_DATA[RAW_DATA.length - 1];
+  const statusEl = document.getElementById('monthlyLastStatus');
+  const badgeEl = document.getElementById('monthlyStatusBadge');
+  if (last) {
+    const isOk = last.status === '정상';
+    statusEl.textContent = last.status;
+    statusEl.className = 'kpi-value ' + (isOk ? 'text-blue-600' : 'text-rose-600');
+    badgeEl.className = 'kpi-badge inline-flex items-center gap-1 font-semibold px-2 py-0.5 rounded-full w-fit ' + (isOk ? 'bg-blue-50 text-blue-600' : 'bg-rose-50 text-rose-600');
+    badgeEl.innerHTML = `<i class="fa-solid ${isOk ? 'fa-check' : 'fa-triangle-exclamation'} text-[10px]"></i> ${isOk ? '정상 운영 중' : '오류 발생 중'}`;
+  } else {
+    statusEl.textContent = '-';
+  }
+}
+
+function renderPeriodPanel() {
+  const data = getPeriodData();
+  const total = data.length;
+  const ok = data.filter(d => d.status === '정상').length;
+  const err = total - ok;
+  const rates = data.map(d => parseFloat((d.rate || '0').replace('%','')) || 0);
+  const avgRate = rates.length ? (rates.reduce((a,b)=>a+b,0) / rates.length) : 0;
+
+  document.getElementById('kpiTotal').textContent = total.toLocaleString();
+  const dates = data.map(d => d.date).filter(Boolean);
+  const uniqueDates = [...new Set(dates)];
+  document.getElementById('kpiPeriod').textContent = uniqueDates.length ? `${uniqueDates[0]} ~ ${uniqueDates[uniqueDates.length-1]}` : '-';
+
+  document.getElementById('kpiOk').textContent = ok.toLocaleString();
+  document.getElementById('kpiOkRatio').textContent = total ? `전체의 ${(ok/total*100).toFixed(1)}%` : '-';
+
+  document.getElementById('kpiError').textContent = err.toLocaleString();
+  document.getElementById('kpiErrorRatio').textContent = total ? `전체의 ${(err/total*100).toFixed(1)}%` : '-';
+
+  document.getElementById('kpiSuccessRate').textContent = avgRate.toFixed(1) + '%';
+  document.getElementById('kpiSuccessBar').style.width = Math.min(avgRate,100) + '%';
+
+  const last = data[data.length - 1];
+  const statusEl = document.getElementById('kpiLastStatus');
+  const timeEl = document.getElementById('kpiLastTime');
+  if (last) {
+    const isOk = last.status === '정상';
+    statusEl.textContent = last.status;
+    statusEl.className = 'kpi-value ' + (isOk ? 'text-emerald-600' : 'text-rose-600');
+    timeEl.textContent = `${last.date} ${last.time}`;
+  } else {
+    statusEl.textContent = '-';
+    timeEl.textContent = '-';
+  }
+
+  const methods = [...new Set(data.map(d => d.method).filter(Boolean))];
+  document.getElementById('kpiMethods').textContent = methods.join(' / ') || '-';
+
+  const rangeLabel = document.getElementById('periodRangeLabel');
+  rangeLabel.textContent = uniqueDates.length ? `조회 범위: ${uniqueDates[0]} ~ ${uniqueDates[uniqueDates.length-1]} (${total}건)` : '조회 결과가 없습니다.';
+}
+
+/* ==========================================================
+   4. 차트 렌더링 (상태 비율만 유지)
+   ========================================================== */
+function renderCharts() {
+  const data = getActiveData();
+  const ok = data.filter(d => d.status === '정상').length;
+  const err = data.length - ok;
+
+  renderChart('statusDoughnut', 'doughnut', {
+    labels: ['정상', '오류 발생'],
+    datasets: [{ data: [ok, err], backgroundColor: ['#10b981', '#f43f5e'], borderWidth: 0 }]
+  }, {
+    cutout: '68%',
+    plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 12 } } } }
+  });
+
+  document.getElementById('statusChartScopeLabel').textContent = activeTab === 'month' ? '당월 점검 결과 분포' : '선택 기간 점검 결과 분포';
+}
+
+function renderChart(canvasId, type, data, extraOptions) {
+  const ctx = document.getElementById(canvasId).getContext('2d');
+  if (charts[canvasId]) charts[canvasId].destroy();
+  charts[canvasId] = new Chart(ctx, {
+    type,
+    data,
+    options: Object.assign({
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { intersect: false, mode: 'index' }
+    }, extraOptions)
+  });
+}
+
+/* ==========================================================
+   5. 오류 하이라이트
+   ========================================================== */
+function renderErrorHighlights() {
+  const errors = getActiveData().filter(d => d.status !== '정상');
+  const section = document.getElementById('errorSection');
+  const list = document.getElementById('errorList');
+  list.innerHTML = '';
+  if (errors.length === 0) {
+    section.classList.add('hidden');
+    return;
+  }
+  section.classList.remove('hidden');
+  errors.forEach(e => {
+    const div = document.createElement('div');
+    div.className = 'flex items-start gap-3 p-3 rounded-xl border border-rose-100 bg-rose-50';
+    div.innerHTML = `
+      <div class="w-8 h-8 rounded-lg bg-rose-500 text-white flex items-center justify-center flex-shrink-0">
+        <i class="fa-solid fa-xmark"></i>
+      </div>
+      <div class="min-w-0">
+        <p class="text-sm font-semibold text-rose-700">${e.date} ${e.time} <span class="text-xs font-normal text-rose-400">(${e.method || '-'})</span></p>
+        <p class="text-xs text-rose-600 mt-0.5 truncate">${e.content || '오류 메시지 없음'}</p>
+      </div>`;
+    list.appendChild(div);
+  });
+}
+
+/* ==========================================================
+   6. 로그 테이블 (검색 / 필터 / 페이지네이션)
+   ========================================================== */
+function buildMethodFilterOptions() {
+  const select = document.getElementById('methodFilter');
+  const methods = [...new Set(RAW_DATA.map(d => d.method).filter(Boolean))];
+  select.innerHTML = '<option value="all">전체 방법</option>' +
+    methods.map(m => `<option value="${m}">${m}</option>`).join('');
+}
+
+function applyFilters() {
+  const search = document.getElementById('searchInput').value.trim().toLowerCase();
+  const status = document.getElementById('statusFilter').value;
+  const method = document.getElementById('methodFilter').value;
+
+  filteredData = getActiveData().filter(d => {
+    const matchSearch = !search || (d.content || '').toLowerCase().includes(search) || (d.date||'').includes(search) || (d.time||'').includes(search);
+    const matchStatus = status === 'all' || d.status === status;
+    const matchMethod = method === 'all' || d.method === method;
+    return matchSearch && matchStatus && matchMethod;
+  }).slice().reverse(); // 최신순 정렬
+
+  currentPage = 1;
+  renderTable();
+}
+
+function renderTable() {
+  const tbody = document.getElementById('logTableBody');
+  tbody.innerHTML = '';
+
+  const totalPages = Math.max(1, Math.ceil(filteredData.length / PAGE_SIZE));
+  currentPage = Math.min(currentPage, totalPages);
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const pageItems = filteredData.slice(start, start + PAGE_SIZE);
+
+  if (pageItems.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-slate-400 text-sm">조건에 맞는 데이터가 없습니다.</td></tr>`;
+  }
+
+  pageItems.forEach(d => {
+    const isOk = d.status === '정상';
+    const tr = document.createElement('tr');
+    tr.className = 'hover:bg-slate-50 transition';
+    tr.innerHTML = `
+      <td class="py-2.5 pr-4 whitespace-nowrap text-slate-700">${d.date || '-'}</td>
+      <td class="py-2.5 pr-4 whitespace-nowrap text-slate-500">${d.time || '-'}</td>
+      <td class="py-2.5 pr-4 whitespace-nowrap text-slate-500">${d.method || '-'}</td>
+      <td class="py-2.5 pr-4 whitespace-nowrap">
+        <span class="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${isOk ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}">
+          <span class="status-dot ${isOk ? 'bg-emerald-500' : 'bg-rose-500'}"></span>${d.status || '-'}
+        </span>
+      </td>
+      <td class="py-2.5 pr-4 text-slate-600 max-w-xs truncate" title="${d.content || ''}">${d.content || '-'}</td>
+      <td class="py-2.5 pr-4 text-right font-semibold ${isOk ? 'text-emerald-600' : 'text-rose-600'}">${d.rate || '-'}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('tableSummary').textContent = `총 ${filteredData.length.toLocaleString()}건 중 ${pageItems.length ? start + 1 : 0}-${start + pageItems.length}건 표시`;
+  document.getElementById('pageInfo').textContent = `${currentPage} / ${totalPages}`;
+  document.getElementById('prevPage').disabled = currentPage <= 1;
+  document.getElementById('nextPage').disabled = currentPage >= totalPages;
+}
+
+/* ==========================================================
+   7. 이벤트 바인딩
+   ========================================================== */
+document.getElementById('searchInput').addEventListener('input', applyFilters);
+document.getElementById('statusFilter').addEventListener('change', applyFilters);
+document.getElementById('methodFilter').addEventListener('change', applyFilters);
+document.getElementById('prevPage').addEventListener('click', () => { currentPage--; renderTable(); });
+document.getElementById('nextPage').addEventListener('click', () => { currentPage++; renderTable(); });
+document.getElementById('refreshBtn').addEventListener('click', () => {
+  document.getElementById('loadingOverlay').style.display = 'flex';
+  document.getElementById('loadingOverlay').style.opacity = '1';
+  loadSheetData();
+});
+document.getElementById('tabMonthBtn').addEventListener('click', () => setActiveTab('month'));
+document.getElementById('tabPeriodBtn').addEventListener('click', () => setActiveTab('period'));
+document.getElementById('periodApplyBtn').addEventListener('click', () => {
+  periodStartDate = document.getElementById('periodStart').value || null;
+  periodEndDate = document.getElementById('periodEnd').value || null;
+  refreshActivePanels();
+});
+document.getElementById('periodResetBtn').addEventListener('click', () => {
+  periodStartDate = null;
+  periodEndDate = null;
+  document.getElementById('periodStart').value = '';
+  document.getElementById('periodEnd').value = '';
+  refreshActivePanels();
+});
+
+/* ==========================================================
+   8. 초기 실행
+   ========================================================== */
+loadSheetData();
+</script>
+
+</body>
+</html>
