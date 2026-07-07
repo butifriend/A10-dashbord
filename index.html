@@ -389,7 +389,15 @@ async function loadSheetData() {
     rows.forEach(r => {
       const cells = r.c;
       if (!cells) return;
-      const get = (i) => (cells[i] && cells[i].v !== null && cells[i].v !== undefined) ? String(cells[i].v).trim() : '';
+      // Google gviz는 날짜/시간 타입 셀의 경우 v(원시값)가 "Date(2026,6,7)" 같은
+      // 생성자 형태 문자열로 오고, 사람이 읽기 좋은 값은 f(formatted)에 담겨 온다.
+      // 문자열 타입 셀(방법/상태/내용/성공률)은 f가 없으므로 v를 그대로 사용한다.
+      const get = (i) => {
+        const cell = cells[i];
+        if (!cell || cell.v === null || cell.v === undefined) return '';
+        const val = (cell.f !== undefined && cell.f !== null && cell.f !== '') ? cell.f : cell.v;
+        return String(val).trim();
+      };
       const date = get(0), time = get(1), method = get(2), status = get(3), content = get(4), rate = get(5);
       if (!date && !time && !status) return; // 빈 행 skip
       parsed.push({ date, time, method, status, content, rate });
